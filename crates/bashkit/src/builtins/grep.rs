@@ -1073,9 +1073,9 @@ async fn try_indexed_search(
         }
     }
 
-    if inputs.is_empty() {
-        return None;
-    }
+    // Reaching here means a provider was obtained and searched every root
+    // successfully, so empty inputs mean "handled, zero matches" — return
+    // Some(empty) rather than None, which would trigger a full linear rescan.
     Some(inputs)
 }
 

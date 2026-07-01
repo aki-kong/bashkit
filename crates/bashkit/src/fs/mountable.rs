@@ -518,6 +518,25 @@ impl FileSystem for MountableFs {
         let (fs, resolved) = self.resolve(path);
         fs.set_modified_time(&resolved, time).await
     }
+
+    fn as_search_capable(&self) -> Option<&dyn super::SearchCapable> {
+        // MountableFs is always the outermost layer, so without this forward
+        // no wrapped filesystem's indexed search is ever reachable. Advertise
+        // the capability and resolve per-path in `search_provider`.
+        Some(self)
+    }
+}
+
+impl super::SearchCapable for MountableFs {
+    fn search_provider(
+        &self,
+        path: &Path,
+    ) -> Option<Box<dyn super::SearchProvider>> {
+        // Route to whichever filesystem backs `path` (a mount or the root),
+        // translating into that filesystem's namespace first.
+        let (fs, resolved) = self.resolve(path);
+        fs.as_search_capable()?.search_provider(&resolved)
+    }
 }
 
 #[async_trait]
