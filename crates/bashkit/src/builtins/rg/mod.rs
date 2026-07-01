@@ -3865,7 +3865,6 @@ async fn try_indexed_search(
     if opts.invert_match
         || opts.files_without_matches
         || opts.crlf
-        || opts.uses_ignore_files()
         || opts.patterns.len() != 1
         || opts.max_filesize.is_some()
         || !opts.type_includes.is_empty()
@@ -3895,6 +3894,18 @@ async fn try_indexed_search(
             })
             .collect()
     };
+
+    // Ignore-file handling (the default) normally disqualifies the index,
+    // since it can't replay .gitignore/.ignore/.rgignore filtering. But if no
+    // such files actually exist under the roots, that filtering is a no-op —
+    // scan for them (cheap: directory listings only) and only bail if present.
+    if opts.uses_ignore_files() {
+        for (root, _) in &roots {
+            if tree_has_ignore_file(fs, &crate::fs::normalize_path(root)).await {
+                return None;
+            }
+        }
+    }
 
     let mut inputs = Vec::new();
     let mut seen_paths = HashSet::new();
@@ -3960,6 +3971,36 @@ async fn try_indexed_search(
     }
 
     Some(inputs)
+}
+
+/// Recursively check whether any ripgrep ignore file exists under `root`.
+/// Only directory listings are read (no file contents), so this is cheap even
+/// over large trees. A missing/unreadable `root` counts as "no ignore files".
+fn tree_has_ignore_file<'a>(
+    fs: &'a dyn crate::fs::FileSystem,
+    root: &'a Path,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send + 'a>> {
+    Box::pin(async move {
+        let entries = match fs.read_dir(root).await {
+            Ok(e) => e,
+            Err(_) => return false,
+        };
+        for entry in &entries {
+            if entry.metadata.file_type.is_file()
+                && matches!(entry.name.as_str(), ".gitignore" | ".ignore" | ".rgignore")
+            {
+                return true;
+            }
+        }
+        for entry in entries {
+            if entry.metadata.file_type.is_dir()
+                && tree_has_ignore_file(fs, &root.join(&entry.name)).await
+            {
+                return true;
+            }
+        }
+        false
+    })
 }
 
 fn path_allowed_by_hidden_filter(path: &Path, root: &Path, opts: &RgOptions, cwd: &Path) -> bool {
