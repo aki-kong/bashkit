@@ -7,7 +7,7 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.12.0"
+version = "0.13.0"
 edition = "2024"
 license = "MIT"
 authors = ["Mykhailo Chalyi <mike@chaliy.name>", "Everruns"]
@@ -76,6 +76,13 @@ zeroize = "1"
 # CSPRNG primitive and is already transitively in the dep tree via reqwest/rustls.
 getrandom = { version = "0.4", features = ["wasm_js"] }
 
+# Drop-in std::time::{Instant,SystemTime} replacement for wasm32-unknown-unknown,
+# where std::time is a hard panic ("time not implemented on this platform" — no
+# extension point, see library/std/src/sys/time/unsupported.rs). Backed by
+# Performance.now()/Date.now() via web-sys on wasm32; re-exports std::time
+# unchanged everywhere else. See crates/bashkit/src/time_compat.rs.
+web-time = "1"
+
 # CLI
 # Intentionally NOT enabling clap's `env` feature: it makes `Arg::env(...)`
 # read defaults from `std::env`, which would tunnel host process state into
@@ -101,7 +108,7 @@ tracing = "0.1"
 tower = { version = "0.5", features = ["util"] }
 
 # SSH client (for ssh/scp/sftp builtins)
-russh = "0.61"
+russh = "0.62"
 # Embedded SQLite engine (Turso, pure Rust). Upstream is BETA — gated behind
 # the `sqlite` feature and disabled by default; see specs/sqlite-builtin.md.
 turso_core = "0.6"
